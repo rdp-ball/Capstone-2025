@@ -13,10 +13,13 @@ This project presents a novel decision-making strategy for autonomous vehicles d
 ## Project Components
 1.Pedestrian Intention Model: 
   * Utilizes features like position, velocity, and clustering to predict pedestrian behavior.
+    
 2. Driver Intention Model:
   * Analyzes vehicle dynamics and pedestrian intentions to predict driver actions.
+    
 3. DDPG-based DRL Model: 
   * Takes in the predicted intentions and the ego vehicle's state to decide the best course of action.
+    
 4. Safety Control Module: 
   * Acts as a safeguard, ensuring all decisions adhere to safety standards.
     
