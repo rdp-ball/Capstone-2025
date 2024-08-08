@@ -4,15 +4,18 @@ This project presents a novel decision-making strategy for autonomous vehicles d
 
 ## Key Features
 
-1.Pedestrian Intention Model:  
-   Predicts the actions of pedestrian clusters near the merging zone, such as crossing, waiting, or walking alongside the road.
-2. Driver Intention Model:  Predicts the behavior of main-lane vehicles, including whether they will yield, accelerate, or change lanes.
-3. DRL DDPG Model: Trains the ego vehicle to execute optimal merging strategies by considering the intentions of nearby pedestrians and vehicles.
-4. Safety Control Mechanism:  Ensures safe maneuvering by overriding any unsafe decisions made by the DRL model.
+1. Pedestrian Intention Model:
+   * Predicts the actions of pedestrian clusters near the merging zone, such as crossing, waiting, or walking alongside the road.
+2. Driver Intention Model:
+   * Predicts the behavior of main-lane vehicles, including whether they will yield, accelerate, or change lanes.
+3. DRL DDPG Model:
+   * Trains the ego vehicle to execute optimal merging strategies by considering the intentions of nearby pedestrians and vehicles.
+4. Safety Control Mechanism:
+   * Ensures safe maneuvering by overriding any unsafe decisions made by the DRL model.
 
 ## Project Components
 1.Pedestrian Intention Model: 
-  * Utilizes features like position, velocity, and clustering to predict pedestrian behavior.
+Utilizes features like position, velocity, and clustering to predict pedestrian behavior.
     
 2. Driver Intention Model:
   * Analyzes vehicle dynamics and pedestrian intentions to predict driver actions.
