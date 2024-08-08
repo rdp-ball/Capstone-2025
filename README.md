@@ -1,4 +1,4 @@
-#** DRL-Based Highway On-Ramp Merging with Pedestrian and Driver Intention Models**
+# DRL-Based Highway On-Ramp Merging with Pedestrian and Driver Intention Models
 Overview
 This project presents a novel decision-making strategy for autonomous vehicles during highway on-ramp merging scenarios. The strategy is powered by a Deep Reinforcement Learning (DRL) model, specifically the Deep Deterministic Policy Gradient (DDPG) algorithm, which is enhanced by predicting the intentions of both pedestrians and vehicles in the merging area.
 
