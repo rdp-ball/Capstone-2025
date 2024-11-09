@@ -1,5 +1,6 @@
 import os
 import sys
+import csv
 import traci
 import numpy as np
 from gymnasium import Env
@@ -46,6 +47,15 @@ class SumoEnv(Env):
         # Get the current directory
         current_dir = os.path.dirname(os.path.abspath(__file__))
         
+        # Create Evaluations directory
+        eval_dir = os.path.join(current_dir, "Evaluations")
+        os.makedirs(eval_dir, exist_ok=True)
+        
+        # Use absolute path for velocity.csv
+        velocity_path = os.path.join(eval_dir, "velocity.csv")
+        f = open(velocity_path, "w", newline="")
+        self.velocity_writer = csv.writer(f)
+
         # sumo config with absolute path
         if gui:
             self.sumoBinary = "sumo-gui"
@@ -72,38 +82,13 @@ class SumoEnv(Env):
 
         # start simulation
         traci.start(self.sumoCmd)
-        traci.simulationStep()  # Take one step to initialize
+        traci.simulationStep()
 
         # reset variables
         self.crash = False
         self.merged = False
         self.timeout = False
         self.triggered = False
-
-        # Add the RL vehicle with minimal parameters
-        try:
-            if self.rl_id in traci.vehicle.getIDList():
-                traci.vehicle.remove(self.rl_id)
-                traci.simulationStep()
-                
-            traci.vehicle.add(
-                vehID=self.rl_id,
-                routeID="route_0",
-                departLane="0",
-                departPos="0",
-                departSpeed="0"
-            )
-            
-            # Set vehicle parameters
-            traci.vehicle.setSpeedMode(self.rl_id, 32)
-            traci.vehicle.setLaneChangeMode(self.rl_id, 0)
-            traci.vehicle.setColor(self.rl_id, (255, 0, 0))
-        except traci.exceptions.TraCIException as e:
-            print(f"Error in vehicle initialization: {e}")
-            raise
-
-        # Step once more after vehicle addition
-        traci.simulationStep()
 
         # get initial state
         self.state = self.get_state(self.rl_id)
@@ -117,6 +102,7 @@ class SumoEnv(Env):
         # apply the actions and move a step forward
         self.apply_action(action, self.rl_id)
         traci.simulationStep()
+        self.velocity_writer.writerow([self.rl_id, traci.vehicle.getSpeed(self.rl_id)])
         
         if ":merge" in traci.vehicle.getRoadID(self.rl_id):
             traci.vehicle.changeSublane(self.rl_id, -traci.vehicle.getLateralLanePosition(self.rl_id))
@@ -157,22 +143,15 @@ class SumoEnv(Env):
         action[0]: acceleration/deceleration (-3 to 3)
         action[1]: lane change (-3.2 to 3.2)
         """
-        try:
-            # Apply acceleration/deceleration
-            traci.vehicle.setAcceleration(rl_id, float(action[0]), self.step_length)
+        # Apply acceleration/deceleration
+        traci.vehicle.setAcceleration(rl_id, float(action[0]), self.step_length)
 
-            # Apply lane change if on merging section
-            if (traci.vehicle.getRoadID(rl_id) == "merging" and 
-                traci.vehicle.getPosition(rl_id)[0] < 240 and 
-                not self.triggered):
-                
-                lateral_movement = float(action[1])
-                traci.vehicle.changeSublane(rl_id, lateral_movement)
-                if abs(lateral_movement) > 0.1:
-                    self.triggered = True
-        except traci.exceptions.TraCIException as e:
-            print(f"Error in apply_action: {e}")
-            self.crash = True
+        # Apply lane change if on merging section and in position
+        if traci.vehicle.getRoadID(rl_id) == "merging" and traci.vehicle.getPosition(rl_id)[0] < 240 and self.triggered == False:
+            lateral_movement = float(action[1])
+            traci.vehicle.changeSublane(rl_id, lateral_movement)
+            if abs(lateral_movement) > 0.1:  # If significant lane change attempted
+                self.triggered = True
 
     def get_state(self, rl_id, crash=False):
         # if crash return zeros
