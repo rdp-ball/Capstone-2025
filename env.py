@@ -1,7 +1,5 @@
-import gym
-import gymnasium
 from gym import Env
-from gymnasium.spaces import Discrete, Box
+from gym.spaces import Discrete, Box
 import time
 import numpy as np
 import os, sys
@@ -15,7 +13,6 @@ import csv
 class SumoEnv(Env):
     def __init__(self, gui):
         # defining misc variables
-        #super(SumoEnv, self).__init__()
         self.step_length = 0.1
         self.rl_counter = 1
         self.rl_id = "rl_1"
@@ -41,22 +38,21 @@ class SumoEnv(Env):
         self.num_acc_actions = 4 * self.max_accel + 1
 
         # defining state and observation spaces
-        self.action_space = gymnasium.spaces.discrete.Discrete(14)
-        #self.action_space = Discrete(self.num_acc_actions + 1)
-        #self.action_space = Discrete()
+        self.action_space = Discrete(self.num_acc_actions + 1)
         self.observation_space = Box(low=-1, high=3, shape=(self.num_observations,), dtype=np.float32)
 
         # start the SUMO simulation
         if "SUMO_HOME" in os.environ:
             tools = os.path.join(os.environ["SUMO_HOME"], "tools")
             sys.path.append(tools)
-            # Use os.path.join to create platform-independent paths
-            if gui:
-                self.sumoBinary = os.path.join(os.environ["SUMO_HOME"], "bin", "sumo-gui")
-            else:
-                self.sumoBinary = os.path.join(os.environ["SUMO_HOME"], "bin", "sumo")
+
         else:
             sys.exit("Please declare environment variable 'SUMO_HOME'")
+
+        if gui == True:
+            self.sumoBinary = r"C:\Program Files (x86)\Eclipse\Sumo\bin\sumo-gui.exe"
+        else:
+            self.sumoBinary = r"C:\Program Files (x86)\Eclipse\Sumo\bin\sumo.exe"
 
         self.path = os.path.join(pathlib.Path(__file__).parent.resolve(), "training_sim.sumocfg")
 
@@ -104,16 +100,8 @@ class SumoEnv(Env):
         return self.state, reward, done, info
 
 
-    def reset(self, seed=None, options=None):
-        # If you want to use the seed
-        if seed is not None:
-            np.random.seed(seed)
-        
-        #if seed is not None:
-        # Set the seed for randomization, for example:
-            #np.random.seed(seed)
-        # or if using SUMO environment-specific randomization:
-            #self.sumo_env.set_random_seed(seed)
+    def reset(self):
+
         if self.crash or self.timeout:
             # reset for crash or sim timeout
             traci.load(self.loadCmd)
@@ -158,7 +146,7 @@ class SumoEnv(Env):
 
         self.state = self.get_state(self.rl_id, crash=self.crash)
         
-        return self.state, {}  # observation, info, truncated
+        return self.state
 ###########################################################################################################################
 # primary functions
 

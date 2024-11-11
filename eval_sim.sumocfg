@@ -6,9 +6,8 @@
 <configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/sumoConfiguration.xsd">
 
     <input>
-        <!-- <net-file value="learning_net.net.xml"/> -->
-        <net-file value="learning_net_with_sidewalks.net.xml"/>
-        <route-files value="learning_rou.rou.xml"/>
+        <net-file value="learning_net.net.xml"/>
+        <route-files value="eval_rou.rou.xml"/>
     </input>
 
 </configuration>

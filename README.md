@@ -1,38 +1,20 @@
-#  DRL-Based Highway On-Ramp Merging with Pedestrian and Driver Intention Models 
-## Overview
-This project presents a novel decision-making strategy for autonomous vehicles during highway on-ramp merging scenarios. The strategy is powered by a Deep Reinforcement Learning (DRL) model, specifically the Deep Deterministic Policy Gradient (DDPG) algorithm, which is enhanced by predicting the intentions of both pedestrians and vehicles in the merging area.
+# RACE-SM: Reinforcement Learning Based Autonomous Control for Social On-Ramp Merging
+## About
+This project seeks to use reinforcement learning to handle acceleration and lane change decision making for autonomous on-ramp merging. The .xml files are used to generate the road network in the SUMO simualtor. train_PPO.py is used to train a PPO agent in the OpenAI gym environment defined in env.py. The resultant model can be tested using evaluate.py. Note that this code focusses upon functionality above code efficiency. 
 
-## Key Features
+### Environment
+#### Overview
+A SUMO subprocess is started using the TraCI API and communicated with to obtain states and implement actions. An ego vehicle is released initially and once it has merged, the episode is done and a new ego vehicle is released. The SUMO configuration is reloaded upon a collision or timeout.
 
-1. Pedestrian Intention Model:
-   * Predicts the actions of pedestrian clusters near the merging zone, such as crossing, waiting, or walking alongside the road.
-2. Driver Intention Model:
-   * Predicts the behavior of main-lane vehicles, including whether they will yield, accelerate, or change lanes.
-3. DRL DDPG Model:
-   * Trains the ego vehicle to execute optimal merging strategies by considering the intentions of nearby pedestrians and vehicles.
-4. Safety Control Mechanism:
-   * Ensures safe maneuvering by overriding any unsafe decisions made by the DRL model.
+#### State
+A box state space is being used. The state space consists of gaps between vehicles, vehicle speeds and four other variables.
 
-## Project Components
-1. Pedestrian Intention Model: 
-   * Utilizes features like position, velocity, and clustering to predict pedestrian behavior.    
-2. Driver Intention Model:
-  * Analyzes vehicle dynamics and pedestrian intentions to predict driver actions.
-3. DDPG-based DRL Model: 
-  * Takes in the predicted intentions and the ego vehicle's state to decide the best course of action.  
-4. Safety Control Module: 
-  * Acts as a safeguard, ensuring all decisions adhere to safety standards.
-    
-## How It Works
-The ego vehicle enters the control zone and collects data on nearby vehicles and pedestrians.
-Pedestrian and driver intentions are predicted using respective models.
-The DRL model processes these predictions and the ego vehicle's current state to determine an optimal merging action.
-A safety module checks and potentially adjusts the action to avoid any dangerous situations.
-The ego vehicle executes the action, and the DRL model learns from the outcome to improve future performance.
+The gaps between the ego vehicle and vehicles immediately leading and trailing it in the right highway lane are included, along with their speeds. In addition to this, the gap between the leading vehicle in the right lane and its leading vehicle are also recorded, along with this vehicle’s speed. The gap between the following vehicle in the right lane and its following vehicle are included along with this vehicles speed.
 
-## Use Cases
-* Autonomous highway merging with pedestrian influence.
-* Enhanced decision-making in complex traffic scenarios.
-* Research in DRL applications for autonomous driving.
-## Getting Started
-To get started, clone this repository and follow the instructions to set up the SUMO simulation environment, train the DRL model, and run simulations of the merging strategy.
+In addition, the state space includes the ego vehicle’s speed, its x-distance to the merging point, the number of lanes in the section of road the ego vehicle is travelling on, the ego vehicle’s current lane, the ego vehicle's lateral position relative to the centre of the lane and the velocity of a directly adjacent vehicle if applicable.
+
+#### Actions
+A discrete action space is being used consisting of accelerations in the range +-3 m/s^2 in 0.5 m/s^2 increments along with a lane change option.
+
+#### Reward
+Generally, when the vehicle has not yet merged it receives no reward. A penalty for crashing is applied. Otherwise, it receives a reward based the concept of Social Value Orientation (SVO) from the field of social psychology. In this project, an SVO of 0 degrees indicates purely selfish behaviour and 90 degrees indicates purely altruistic behaviour. Sin(SVO) and Cos(SVO) are used as multipliers to adjust the value the ego vehicle places its on utility to itself and to the immediately surrounding vehicles.

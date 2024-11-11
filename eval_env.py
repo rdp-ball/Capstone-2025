@@ -1,6 +1,4 @@
-
 from gym import Env
-
 from gym.spaces import Discrete, Box
 import time
 import numpy as np
@@ -52,9 +50,9 @@ class SumoEnv(Env):
             sys.exit("Please declare environment variable 'SUMO_HOME'")
 
         if gui == True:
-            self.sumoBinary = r"/Users/rolwinpinto/sumo/bin/sumo-gui.exe"
+            self.sumoBinary = r"C:\Program Files (x86)\Eclipse\Sumo\bin\sumo-gui.exe"
         else:
-            self.sumoBinary = r"/Users/rolwinpinto/sumo/bin/sumo.exe"
+            self.sumoBinary = r"C:\Program Files (x86)\Eclipse\Sumo\bin\sumo.exe"
 
         self.path = os.path.join(pathlib.Path(__file__).parent.resolve(), "eval_sim.sumocfg")
 
