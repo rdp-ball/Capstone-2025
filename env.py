@@ -41,7 +41,7 @@ class SumoEnv(Env):
         self.num_acc_actions = 4 * self.max_accel + 1
 
         # defining state and observation spaces
-        self.action_space = Box(low=-1, high=1, shape=(2,), dtype=np.float32)
+        self.action_space = gymnasium.spaces.discrete.Discrete(14)
         #self.action_space = Discrete(self.num_acc_actions + 1)
         #self.action_space = Discrete()
         self.observation_space = Box(low=-1, high=3, shape=(self.num_observations,), dtype=np.float32)
@@ -58,7 +58,7 @@ class SumoEnv(Env):
         else:
             sys.exit("Please declare environment variable 'SUMO_HOME'")
 
-        self.path = os.path.join(pathlib.Path(__file__).parent.resolve(), "training_sim.sumocfg")
+        self.path = os.path.join(pathlib.Path(__file__).parent.resolve(), "training_1_sim.sumocfg")
 
         # sumo start cmd. Sets step length, checks only real collisions
         self.sumoCmd = [self.sumoBinary, "-c", self.path, "--step-length", f"{self.step_length}", "--collision.check-junctions", "--lateral-resolution", "1.6", "--collision.mingap-factor", "0", "--random"]
