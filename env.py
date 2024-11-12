@@ -41,7 +41,7 @@ class SumoEnv(Env):
         self.num_acc_actions = 4 * self.max_accel + 1
 
         # defining state and observation spaces
-        self.action_space = gymnasium.spaces.discrete.Discrete(14)
+        self.action_space = Box(low=-1, high=1, shape=(2,), dtype=np.float32)
         #self.action_space = Discrete(self.num_acc_actions + 1)
         #self.action_space = Discrete()
         self.observation_space = Box(low=-1, high=3, shape=(self.num_observations,), dtype=np.float32)
