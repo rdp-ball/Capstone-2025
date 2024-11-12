@@ -6,29 +6,27 @@ from env import SumoEnv
 from eval_env import SumoEnv as EvalEnv
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback, CallbackList
 from stable_baselines3.common.monitor import Monitor
-from stable_baselines3 import DDPG
-from gym import spaces
-import numpy as np
 
 def main():
 
     # input variables
     num_envs = 1
-    timesteps = 100000
+    timesteps = 100
     eval_freq = 1000000
     iteration = 91
-    algo = "DDPG"
+    algo = "PPO"
 
 
 
 
 
 
-    gui = True
+    gui = False
 
     # paths and eval adjusting for multiple envs
     result_name = f"{iteration}_{algo}_{timesteps}"
     current_path = pathlib.Path(__file__).parent.resolve()
+    # save_path = os.path.join(current_path, "Models", f"rl_model_{result_name}")  # Update this line
     log_path = os.path.join(current_path,"Logs", result_name)
     checkpoint_save_path = os.path.join(current_path, "Models", result_name)
     final_save_path = os.path.join(checkpoint_save_path, result_name)
@@ -63,8 +61,7 @@ def main():
     callback = CallbackList([checkpoint_callback, eval_callback])
 
     # create, train, save model
-    model = DDPG("MlpPolicy", env, verbose=1, tensorboard_log=log_path, device="cpu")
-    #model = PPO("MlpPolicy", env, verbose=1, tensorboard_log=log_path, device="cpu")
+    model = PPO("MlpPolicy", env, verbose=1, tensorboard_log=log_path, device="cpu")
     model.learn(total_timesteps=timesteps, callback=callback)
 
     print("Training complete. Saving model.")
