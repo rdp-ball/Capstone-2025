@@ -52,9 +52,9 @@ class SumoEnv(Env):
             sys.exit("Please declare environment variable 'SUMO_HOME'")
 
         if gui == True:
-            self.sumoBinary = r"/Users/rolwinpinto/sumo/bin/sumo-gui.exe"
+            self.sumoBinary = r"/Users/rolwinpinto/sumo/bin/sumo-gui"
         else:
-            self.sumoBinary = r"/Users/rolwinpinto/sumo/bin/sumo.exe"
+            self.sumoBinary = r"/Users/rolwinpinto/sumo/bin/sumo"
 
         self.path = os.path.join(pathlib.Path(__file__).parent.resolve(), "eval_sim.sumocfg")
 
