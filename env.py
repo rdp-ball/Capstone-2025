@@ -10,12 +10,13 @@ import traci.constants as tc
 from traci.exceptions import TraCIException
 import pathlib
 import csv
+from pedestrian_intent_nn import PedestrianIntentPredictor
+from driver_intent_nn import DriverIntentPredictor
 
 # defines env
 class SumoEnv(Env):
     def __init__(self, gui):
         # defining misc variables
-        #super(SumoEnv, self).__init__()
         self.step_length = 0.1
         self.rl_counter = 1
         self.rl_id = "rl_1"
@@ -32,9 +33,16 @@ class SumoEnv(Env):
         # setting vehicle observation variables and initalising state
         self.leading_obs = 2
         self.trailing_obs = 2
-        self.other_obs = 6
+        # Increased other_obs from 6 to 8 to include:
+        # - Original 6 states: ego_speed, current_lane, merge_dist, num_lanes, blocker_speed, lateral_pos
+        # - New states: pedestrian_intent (0,1,2), driver_intent (0,1,2)
+        self.other_obs = 8  
         self.num_observations = 2 * (self.leading_obs + self.trailing_obs) + self.other_obs
         self.state = [0] * self.num_observations
+
+        # Intent probability thresholds
+        self.ped_intent_threshold = 0.7
+        self.driver_intent_threshold = 0.7
 
         # produces enough actions for +-3 at 0.5 intervals
         self.max_accel = 3
@@ -64,6 +72,14 @@ class SumoEnv(Env):
         self.sumoCmd = [self.sumoBinary, "-c", self.path, "--step-length", f"{self.step_length}", "--collision.check-junctions", "--lateral-resolution", "1.6", "--collision.mingap-factor", "0", "--random"]
         self.loadCmd = self.sumoCmd[1:]
 
+        # Initialize intent predictors
+        model_dir = os.path.join(os.path.dirname(__file__), 'models')
+        self.ped_intent_predictor = PedestrianIntentPredictor(
+            os.path.join(model_dir, 'pedestrian_intent_model.pth')
+        )
+        self.driver_intent_predictor = DriverIntentPredictor(
+            os.path.join(model_dir, 'driver_intent_model.pth')
+        )
 
     # this is how a step is taken
     def step(self, action):
@@ -206,6 +222,7 @@ class SumoEnv(Env):
         trailing_vehicles = self.add_trailing_vehicles(rl_id, self.trailing_obs, self.speed_limit, self.network_length, self.merged)
         leading_vehicles = self.add_leading_vehicles(rl_id, self.leading_obs, self.speed_limit, self.network_length, self.merged)
 
+        # Original state space (first 6 other_obs values)
         for i, vehicle in enumerate(trailing_vehicles):
             observation[2 * i] = vehicle["speed"]
             observation[2 * i + 1] = vehicle["gap"]
@@ -220,24 +237,50 @@ class SumoEnv(Env):
         observation[total_observed * 2 + 3] = num_lanes
         observation[total_observed * 2 + 4] = blocker_speed/self.speed_limit
         observation[total_observed * 2 + 5] = traci.vehicle.getLateralLanePosition(rl_id)/3.2
-        
+
+        # New intent states (last 2 other_obs values)
+        # Intent classes: 0 (proceed), 1 (slow down), 2 (stop)
+        observation[total_observed * 2 + 6] = self.predict_pedestrian_intent(rl_id)  # Pedestrian intent
+        observation[total_observed * 2 + 7] = self.predict_driver_intent(rl_id)  # Driver intent
+  
         self.state = observation
   
         return self.state
 
 
     def get_reward(self, rl_id, **kwargs):
-
-        # if a crash has occurred return or on on-ramp
+        # if a crash has occurred return
         if kwargs["crash"]:
             return -20
 
         ego_speed = traci.vehicle.getSpeed(rl_id)
+        
+        # Get intent predictions
+        ped_intent = self.predict_pedestrian_intent(rl_id)
+        driver_intent = self.predict_driver_intent(rl_id)
 
         if not kwargs["merged"]:
-            return 0
+            # Base reward for not merged state
+            base_reward = 0
+            
+            # Penalize based on pedestrian intent
+            if ped_intent == 2:  # Stop
+                if ego_speed > self.speed_limit * 0.3:
+                    base_reward -= 10
+            elif ped_intent == 1:  # Slow down
+                if ego_speed > self.speed_limit * 0.7:
+                    base_reward -= 5
+                    
+            # Adjust based on driver intent
+            if driver_intent == 0:  # Proceed (cooperative)
+                base_reward += 2
+            elif driver_intent == 2:  # Stop (uncooperative)
+                if ego_speed > self.speed_limit * 0.5:
+                    base_reward -= 5
+                    
+            return base_reward
 
-        # set default head and tailways 
+        # Post-merge reward calculation
         tailway = traci.vehicle.getPosition(rl_id)[0]
         headway = (500 - traci.vehicle.getPosition(rl_id)[0])
 
@@ -246,7 +289,7 @@ class SumoEnv(Env):
 
         normalising_gap = (traci.lane.getLength("incoming_0") + traci.lane.getLength("merging_0") + traci.lane.getLength("outgoing_0")) - 100
         normalising_dis_from_centre = normalising_gap/2
-    
+
         trailing = traci.vehicle.getFollower(rl_id, 500)
         if trailing not in [None, ('',-1), ()]:
             tailway = trailing[1] + traci.vehicle.getMinGap(trailing[0])
@@ -266,18 +309,28 @@ class SumoEnv(Env):
         if headway > 40 and tailway > 40:
             dis_from_centre = 0
 
-        # weights 
+        # Base weights
         w1, w2, w3, w4, w5 = 0.5/self.speed_limit, 15/normalising_gap, 10/normalising_dis_from_centre, 12/self.speed_limit, 16/self.speed_limit
 
-        # general form of usual reward function
+        # Calculate base reward components
         ego = w1 * ego_speed + w4 * leader_speed_dif
         oth = w2 * gap - w3 * dis_from_centre + w5 * trailing_speed_dif
-        svo = np.radians(45) # svo value in radians
-
+        
+        # Adjust rewards based on intent classes
+        if ped_intent == 2:  # Stop
+            ego *= 0.5  # Significantly reduce ego reward
+        elif ped_intent == 1:  # Slow down
+            ego *= 0.8  # Moderately reduce ego reward
+            
+        if driver_intent == 0:  # Proceed (cooperative)
+            oth *= 1.2  # Increase cooperative reward
+        elif driver_intent == 2:  # Stop (uncooperative)
+            oth *= 0.8  # Reduce cooperative reward
+            
+        svo = np.radians(45)  # svo value in radians
         reward = ego * np.cos(svo) + oth * np.sin(svo)
 
         return reward
-
 ########################################################################################################################
 # helper functions
     def release_rl(self):
@@ -362,3 +415,128 @@ class SumoEnv(Env):
             vehicles.append(vehicle_data)
 
         return vehicles
+
+    def predict_pedestrian_intent(self, rl_id):
+        """
+        Predicts pedestrian crossing intent using the trained neural network
+        Returns: 0 (cross), 1 (move along), 2 (wait)
+        """
+        try:
+            # Get current simulation step
+            step = traci.simulation.getTime()
+            
+            # Get ego vehicle info
+            ego_pos = traci.vehicle.getPosition(rl_id)
+            ego_speed = traci.vehicle.getSpeed(rl_id)
+            
+            # Find nearest pedestrian and get waiting time
+            peds = traci.person.getIDList()
+            nearest_ped_dist = float('inf')
+            nearby_pedestrians = 0
+            waiting_time = 0
+            
+            for ped in peds:
+                ped_pos = traci.person.getPosition(ped)
+                dist = np.sqrt((ped_pos[0] - ego_pos[0])**2 + (ped_pos[1] - ego_pos[1])**2)
+                
+                if dist < nearest_ped_dist:
+                    nearest_ped_dist = dist
+                    waiting_time = traci.person.getWaitingTime(ped)
+                
+                # Count nearby pedestrians within 20m
+                if dist < 20:
+                    nearby_pedestrians += 1
+            
+            # If no pedestrians found, assume waiting (safest option)
+            if nearest_ped_dist == float('inf'):
+                return 2
+                
+            # Prepare features matching the neural network input
+            features = [
+                ego_pos[0],  # position_x
+                ego_pos[1],  # position_y
+                ego_speed,   # speed
+                waiting_time,
+                nearest_ped_dist,
+                nearby_pedestrians
+            ]
+            
+            # Get prediction from neural network
+            intent = self.ped_intent_predictor.predict(features)
+            
+            # Map neural network output to env states
+            # cross -> proceed (0)
+            # move along -> slow down (1)
+            # wait -> stop (2)
+            return intent
+            
+        except traci.TraCIException:
+            return 2  # Default to wait if there's an error
+
+    def predict_driver_intent(self, rl_id):
+        """
+        Predicts surrounding driver intent using the trained neural network
+        Returns: 0 (cross), 1 (move along), 2 (wait)
+        """
+        try:
+            # Get ego vehicle info
+            ego_pos = traci.vehicle.getPosition(rl_id)
+            ego_speed = traci.vehicle.getSpeed(rl_id)
+            
+            # Get surrounding vehicles
+            leaders = traci.vehicle.getLeftLeaders(rl_id)
+            followers = traci.vehicle.getLeftFollowers(rl_id)
+            surrounding_vehicles = leaders + followers
+            
+            max_intent = 2  # Default to wait (safest option)
+            
+            for veh in surrounding_vehicles:
+                if veh not in [None, ('',-1), ()]:
+                    veh_id = veh[0]
+                    
+                    try:
+                        # Get vehicle position and dynamics
+                        veh_pos = traci.vehicle.getPosition(veh_id)
+                        veh_speed = traci.vehicle.getSpeed(veh_id)
+                        
+                        # Calculate features matching the neural network input
+                        position_x = veh_pos[0]
+                        position_y = veh_pos[1]
+                        speed = veh_speed
+                        waiting_time = traci.vehicle.getWaitingTime(veh_id)
+                        
+                        # Calculate distance to nearest vehicle
+                        nearest_vehicle_dist = float('inf')
+                        nearby_vehicles = 0
+                        for other_veh in surrounding_vehicles:
+                            if other_veh not in [None, ('',-1), ()] and other_veh[0] != veh_id:
+                                other_pos = traci.vehicle.getPosition(other_veh[0])
+                                dist = np.sqrt((other_pos[0] - veh_pos[0])**2 + (other_pos[1] - veh_pos[1])**2)
+                                nearest_vehicle_dist = min(nearest_vehicle_dist, dist)
+                                if dist < 20:
+                                    nearby_vehicles += 1
+                        
+                        if nearest_vehicle_dist == float('inf'):
+                            nearest_vehicle_dist = 100  # Large value if no other vehicles
+                        
+                        # Prepare features
+                        features = [
+                            position_x,
+                            position_y,
+                            speed,
+                            waiting_time,
+                            nearest_vehicle_dist,
+                            nearby_vehicles
+                        ]
+                        
+                        # Get prediction from neural network
+                        intent = self.driver_intent_predictor.predict(features)
+                        max_intent = min(max_intent, intent)  # Take most cautious prediction
+                        
+                    except traci.TraCIException:
+                        continue
+            
+            return max_intent
+            
+        except traci.TraCIException:
+            return 2  # Default to wait if there's an error
